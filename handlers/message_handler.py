@@ -6,6 +6,7 @@ from task_manager import save_tasks, load_all_tasks, complete_task
 import json
 from datetime import datetime
 from handlers.voice_handler import transcribe_voice
+from task_manager import save_tasks, load_all_tasks, complete_task, complete_all_tasks, delete_all_tasks
 
 client = Groq(api_key=GROQ_API_KEY)
 
@@ -50,6 +51,8 @@ But 'all done', 'okay done', 'done' alone = chat, ask them which task they compl
 mention the time in the task title like 'get groceries (before 6pm)'
 - If user is correcting or updating an existing task (like adding a deadline or changing urgency), use intent 'update_task' not 'add_task'
 - For update_task, use the same title as the existing task so it can be found
+- If user says clear all, forget everything, fresh start, delete all — use intent delete_task with empty tasks array
+- If user says all done or done with everything — use complete_task and mark ALL tasks as completed
 """
 
 async def process_message(user_message: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -69,7 +72,7 @@ async def process_message(user_message: str, update: Update, context: ContextTyp
 
     # Build messages with history (last 6 = 3 exchanges)
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         messages=[
             {"role": "system", "content": system}
         ] + conversation_history[-6:],
@@ -100,12 +103,20 @@ async def process_message(user_message: str, update: Update, context: ContextTyp
         elif intent == "update_task" and tasks:
             save_tasks(tasks)  # save_tasks will find and update existing file
 
+        elif intent == "delete_task":
+            task_titles = [t.get("title", "") for t in tasks]
+            if not task_titles or any(word in user_message.lower() for word in ["all", "everything", "clear"]):
+                delete_all_tasks()
+            else:
+                for title in task_titles:
+                    complete_task(title)
+
         elif intent == "list_tasks":
             all_tasks = load_all_tasks()
             if all_tasks:
                 tasks_text = "\n\n".join(all_tasks)
                 summary_response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
+                    model="openai/gpt-oss-120b",
                     messages=[
                         {"role": "system", "content": f"""You are a chill helpful friend summarizing someone's task list.
 Today's date is {today}.
@@ -122,9 +133,20 @@ No markdown, no **, just plain casual text with emojis. Keep it short."""},
             else:
                 reply = "you're all clear! no pending tasks 🙌"
 
+
         elif intent == "complete_task":
-            for task in tasks:
-                complete_task(task.get("title", ""))
+
+            if not tasks:
+
+                # No specific task mentioned — complete all
+
+                complete_all_tasks()
+
+            else:
+
+                for task in tasks:
+                    complete_task(task.get("title", ""))
+
             reply = "✅ " + reply
 
         await update.message.reply_text(reply)

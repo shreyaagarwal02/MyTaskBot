@@ -11,7 +11,7 @@ client = Groq(api_key=GROQ_API_KEY)
 def generate_message(prompt: str, tasks_text: str) -> str:
     today = datetime.now().strftime("%Y-%m-%d")
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         messages=[
             {"role": "system", "content": f"""You are a chill helpful friend. Today is {today}.
 You're texting your friend their task update. Be casual, warm, motivating.
